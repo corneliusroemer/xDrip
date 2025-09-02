@@ -1193,6 +1193,12 @@ public class Preferences extends BasePreferenceActivity implements SearchPrefere
                 bindPreferenceTitleAppendToIntegerValue(findPreference("tone_max_frequency"));
                 bindPreferenceTitleAppendToIntegerValue(findPreference("tone_min_glucose"));
                 bindPreferenceTitleAppendToIntegerValue(findPreference("tone_max_glucose"));
+                // EQ bands show percent
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_eq_1"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_eq_2"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_eq_3"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_eq_4"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_eq_5"));
                 bindPreferenceTitleAppendToIntegerValue(findPreference("tone_calib_low_glucose"));
                 bindPreferenceTitleAppendToIntegerValue(findPreference("tone_calib_high_glucose"));
                 bindPreferenceTitleAppendToIntegerValue(findPreference("tone_calib_max_glucose"));

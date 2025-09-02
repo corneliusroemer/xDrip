@@ -1057,6 +1057,43 @@
                 android:switchTextOff="@string/short_off_text_for_switches"
                 android:switchTextOn="@string/short_on_text_for_switches" />
 
+            <!-- Equalizer: 5-band gain across configured frequency range -->
+            <SeekBarPreference
+                android:key="tone_eq_1"
+                android:title="EQ band 1 (%)"
+                android:summary="Gain at lowest band of range"
+                android:defaultValue="100"
+                android:min="50"
+                android:max="200" />
+            <SeekBarPreference
+                android:key="tone_eq_2"
+                android:title="EQ band 2 (%)"
+                android:summary="Gain between band 1 and 3"
+                android:defaultValue="100"
+                android:min="50"
+                android:max="200" />
+            <SeekBarPreference
+                android:key="tone_eq_3"
+                android:title="EQ band 3 (%)"
+                android:summary="Gain at mid band"
+                android:defaultValue="100"
+                android:min="50"
+                android:max="200" />
+            <SeekBarPreference
+                android:key="tone_eq_4"
+                android:title="EQ band 4 (%)"
+                android:summary="Gain between band 3 and 5"
+                android:defaultValue="100"
+                android:min="50"
+                android:max="200" />
+            <SeekBarPreference
+                android:key="tone_eq_5"
+                android:title="EQ band 5 (%)"
+                android:summary="Gain at highest band of range"
+                android:defaultValue="100"
+                android:min="50"
+                android:max="200" />
+
             <!-- Calibration tones (play before readings) -->
             <SwitchPreference
                 android:key="tone_calib_enabled"

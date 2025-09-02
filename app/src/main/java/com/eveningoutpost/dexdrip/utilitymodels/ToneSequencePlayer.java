@@ -66,8 +66,26 @@ public class ToneSequencePlayer {
         }
         new Thread(() -> {
             try {
-                // Test sequence: no calibration prelude
-                playToneSequence(new double[]{65.0, 85.0, 120.0, 165.0, 220.0}, false);
+                // Test sequence: sweep up and down across configured glucose range
+                final int steps = 10; // number of tones in the upward sweep
+                double minG = Pref.getInt("tone_min_glucose", (int) DEF_MIN_GLUCOSE);
+                double maxG = Pref.getInt("tone_max_glucose", (int) DEF_MAX_GLUCOSE);
+                if (maxG <= minG) maxG = minG + 1.0;
+
+                int total = steps + Math.max(0, steps - 2); // up + down without repeating endpoints
+                double[] vals = new double[total];
+                // Upward sweep
+                for (int i = 0; i < steps; i++) {
+                    double t = (steps == 1) ? 0.0 : (double) i / (double) (steps - 1);
+                    vals[i] = minG + t * (maxG - minG);
+                }
+                // Downward sweep (exclude endpoints)
+                int idx = steps;
+                for (int i = steps - 2; i > 0; i--) {
+                    vals[idx++] = vals[i];
+                }
+                // No calibration prelude during test sweep
+                playToneSequence(vals, false);
             } catch (Exception t) {
                 UserError.Log.e(TAG, "playTestSequence error: " + t.getMessage(), t);
                 cleanupCurrent();
@@ -194,7 +212,8 @@ public class ToneSequencePlayer {
         // calibration block
         for (int i = 0; i < nCal; i++) {
             double f = mapGlucoseToFrequency(calValues.get(i));
-            short[] tone = generateTonePcmTukey(f, calToneSamples, /*alpha=*/0.5, volume);
+            float v = effectiveVolume(volume, f);
+            short[] tone = generateTonePcmTukey(f, calToneSamples, /*alpha=*/0.5, v);
             System.arraycopy(tone, 0, out, writeIdx, calToneSamples);
             writeIdx += calToneSamples;
             if (i < nCal - 1) writeIdx += calPauseSamples;
@@ -204,7 +223,8 @@ public class ToneSequencePlayer {
         // readings block
         for (int i = 0; i < nRead; i++) {
             double f = mapGlucoseToFrequency(readings.get(i));
-            short[] tone = generateTonePcmTukey(f, toneSamples, /*alpha=*/0.5, volume);
+            float v = effectiveVolume(volume, f);
+            short[] tone = generateTonePcmTukey(f, toneSamples, /*alpha=*/0.5, v);
             System.arraycopy(tone, 0, out, writeIdx, toneSamples);
             writeIdx += toneSamples;
             if (i < nRead - 1) writeIdx += pauseSamples;
@@ -315,6 +335,43 @@ public class ToneSequencePlayer {
             // Linear mapping
             return minF + ratio * (maxF - minF);
         }
+    }
+
+    // Equalizer helpers ------------------------------------------------------
+    private static float effectiveVolume(float baseVol, double freq) {
+        float eq = getEqGain(freq);
+        float out = baseVol * eq;
+        if (out < 0f) out = 0f;
+        if (out > 1f) out = 1f;
+        return out;
+    }
+
+    private static float getEqGain(double freq) {
+        double minF = Pref.getInt("tone_min_frequency", (int) DEF_MIN_FREQUENCY);
+        double maxF = Pref.getInt("tone_max_frequency", (int) DEF_MAX_FREQUENCY);
+        if (maxF <= minF) maxF = minF + 1.0;
+
+        final int N = 5;
+        double[] f = new double[N];
+        float[] g = new float[N];
+        for (int i = 0; i < N; i++) {
+            f[i] = minF + i * (maxF - minF) / (double)(N - 1);
+        }
+        g[0] = Pref.getInt("tone_eq_1", 100) / 100f;
+        g[1] = Pref.getInt("tone_eq_2", 100) / 100f;
+        g[2] = Pref.getInt("tone_eq_3", 100) / 100f;
+        g[3] = Pref.getInt("tone_eq_4", 100) / 100f;
+        g[4] = Pref.getInt("tone_eq_5", 100) / 100f;
+
+        if (freq <= f[0]) return g[0];
+        if (freq >= f[N-1]) return g[N-1];
+        for (int i = 0; i < N - 1; i++) {
+            if (freq >= f[i] && freq <= f[i+1]) {
+                double t = (freq - f[i]) / (f[i+1] - f[i]);
+                return (float)(g[i] + t * (g[i+1] - g[i]));
+            }
+        }
+        return 1f;
     }
 
     private static List<Double> getRecentReadings() {
