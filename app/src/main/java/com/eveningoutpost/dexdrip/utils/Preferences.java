@@ -1150,6 +1150,54 @@ public class Preferences extends BasePreferenceActivity implements SearchPrefere
 
             addPreferencesFromResource(R.xml.pref_advanced_settings);
 
+            // Show live integer values on tone SeekBars by appending to title
+            try {
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_readings_count"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_duration_ms"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_pause_ms"));
+                // calibration multiplier uses tenths (5..30 -> 0.5..3.0)
+                final Preference calibMult = findPreference("tone_calib_multiplier");
+                if (calibMult != null) {
+                    final Preference.OnPreferenceChangeListener listener = (preference, newValue) -> {
+                        int steps = (Integer) newValue;
+                        double val = steps / 10.0;
+                        boolean do_update = preference.getTitle().toString().contains("(");
+                        preference.setTitle(preference.getTitle().toString().replaceAll("  \\([^)]+\\)$", "") + "  (" + String.format(java.util.Locale.US, "%.1fx", val) + ")");
+                        if (do_update) preference.getEditor().putInt(preference.getKey(), steps).apply();
+                        return true;
+                    };
+                    calibMult.setOnPreferenceChangeListener(listener);
+                    try {
+                        int cur = PreferenceManager.getDefaultSharedPreferences(calibMult.getContext()).getInt("tone_calib_multiplier", 10);
+                        listener.onPreferenceChange(calibMult, cur);
+                    } catch (Exception ignore) {}
+                }
+                // volume shows percent
+                final Preference toneVol = findPreference("tone_volume");
+                if (toneVol != null) {
+                    final Preference.OnPreferenceChangeListener listener = (preference, newValue) -> {
+                        int pct = (Integer) newValue;
+                        boolean do_update = preference.getTitle().toString().contains("(");
+                        preference.setTitle(preference.getTitle().toString().replaceAll("  \\([^)]+\\)$", "") + "  (" + pct + "%)");
+                        if (do_update) preference.getEditor().putInt(preference.getKey(), pct).apply();
+                        return true;
+                    };
+                    toneVol.setOnPreferenceChangeListener(listener);
+                    try {
+                        int cur = PreferenceManager.getDefaultSharedPreferences(toneVol.getContext()).getInt("tone_volume", 30);
+                        listener.onPreferenceChange(toneVol, cur);
+                    } catch (Exception ignore) {}
+                }
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_calib_pause_ms"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_min_frequency"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_max_frequency"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_min_glucose"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_max_glucose"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_calib_low_glucose"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_calib_high_glucose"));
+                bindPreferenceTitleAppendToIntegerValue(findPreference("tone_calib_max_glucose"));
+            } catch (Exception ignore) {}
+
             final Preference testToneSequence = findPreference("test_tone_sequence");
             if (testToneSequence != null) {
                 testToneSequence.setOnPreferenceClickListener(preference -> {

@@ -992,6 +992,32 @@
                 android:max="2000" />
 
             <SeekBarPreference
+                android:key="tone_pause_ms"
+                android:title="Pause between tones (ms)"
+                android:summary="Silence between tones"
+                android:defaultValue="200"
+                android:min="50"
+                android:max="2000" />
+
+            <SeekBarPreference
+                android:key="tone_calib_pause_ms"
+                android:title="Pause after calibration (ms)"
+                android:summary="Extra silence before readings"
+                android:defaultValue="500"
+                android:min="0"
+                android:max="5000"
+                android:dependency="tone_calib_enabled" />
+
+            <!-- Overall volume for tone playback -->
+            <SeekBarPreference
+                android:key="tone_volume"
+                android:title="Tone volume (%)"
+                android:summary="Playback volume for tones"
+                android:defaultValue="30"
+                android:min="0"
+                android:max="100" />
+
+            <SeekBarPreference
                 android:key="tone_min_frequency"
                 android:title="Min pitch (Hz)"
                 android:summary="Lowest frequency for mapping"
@@ -1022,6 +1048,59 @@
                 android:defaultValue="300"
                 android:min="120"
                 android:max="450" />
+
+            <SwitchPreference
+                android:key="tone_mapping_log_scale"
+                android:title="Musical (log) mapping"
+                android:summary="Map glucose to pitch exponentially (octave-based)"
+                android:defaultValue="false"
+                android:switchTextOff="@string/short_off_text_for_switches"
+                android:switchTextOn="@string/short_on_text_for_switches" />
+
+            <!-- Calibration tones (play before readings) -->
+            <SwitchPreference
+                android:key="tone_calib_enabled"
+                android:title="Calibration prelude"
+                android:summary="Play 3 reference tones (low/high/max) before readings"
+                android:defaultValue="true"
+                android:switchTextOff="@string/short_off_text_for_switches"
+                android:switchTextOn="@string/short_on_text_for_switches" />
+
+            <SeekBarPreference
+                android:key="tone_calib_multiplier"
+                android:title="Calibration multiplier (x)"
+                android:summary="Scale calibration tone length and pauses"
+                android:defaultValue="10"
+                android:min="5"
+                android:max="30"
+                android:dependency="tone_calib_enabled" />
+
+            <SeekBarPreference
+                android:key="tone_calib_low_glucose"
+                android:title="Calibration: low (mg/dL)"
+                android:summary="First tone indicates low threshold"
+                android:defaultValue="70"
+                android:min="40"
+                android:max="120"
+                android:dependency="tone_calib_enabled" />
+
+            <SeekBarPreference
+                android:key="tone_calib_high_glucose"
+                android:title="Calibration: high (mg/dL)"
+                android:summary="Second tone indicates high threshold"
+                android:defaultValue="180"
+                android:min="120"
+                android:max="300"
+                android:dependency="tone_calib_enabled" />
+
+            <SeekBarPreference
+                android:key="tone_calib_max_glucose"
+                android:title="Calibration: max (mg/dL)"
+                android:summary="Third tone indicates mapping maximum"
+                android:defaultValue="400"
+                android:min="250"
+                android:max="500"
+                android:dependency="tone_calib_enabled" />
             <Preference
                 android:key="test_tone_sequence"
                 android:summary="Play a test tone sequence with sample glucose values"

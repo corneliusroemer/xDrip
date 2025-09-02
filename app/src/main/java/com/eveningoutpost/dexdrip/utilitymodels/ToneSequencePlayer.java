@@ -19,7 +19,7 @@ public class ToneSequencePlayer {
 
     // Defaults (overridden by preferences)
     private static final int    DEF_TONE_DURATION_MS = 500;
-    private static final int    PAUSE_DURATION_MS    = 200; // keep fixed gap for readability
+    private static final int    DEF_PAUSE_DURATION_MS= 200; // default gap; configurable
     private static final double DEF_MIN_FREQUENCY    = 200.0;
     private static final double DEF_MAX_FREQUENCY    = 800.0;
     private static final double DEF_MIN_GLUCOSE      = 40.0;
@@ -29,7 +29,7 @@ public class ToneSequencePlayer {
     private static final int FADE_MS       = 100;    // longer edge taper
     private static final int LEAD_IN_MS    = 1000;     // silence before first tone
     private static final int LEAD_OUT_MS   = 30;     // optional
-    private static final float TONE_VOLUME = 0.3f;  // extra headroom
+    private static final float DEF_TONE_VOLUME = 0.3f;  // extra headroom
 
     private static volatile boolean isPlaying = false;
     private static AudioTrack currentAudioTrack = null;
@@ -49,6 +49,7 @@ public class ToneSequencePlayer {
                     return;
                 }
                 double[] values = gv.stream().mapToDouble(Double::doubleValue).toArray();
+                // Let playToneSequence handle optional calibration prelude and timing
                 playToneSequence(values);
             } catch (Exception t) {
                 UserError.Log.e(TAG, "playReadingsSequence error: " + t.getMessage(), t);
@@ -57,6 +58,7 @@ public class ToneSequencePlayer {
         }, "ToneSequencePlayer").start();
     }
 
+
     public static void playTestSequence() {
         if (isPlaying) {
             UserError.Log.d(TAG, "Already playing");
@@ -64,7 +66,8 @@ public class ToneSequencePlayer {
         }
         new Thread(() -> {
             try {
-                playToneSequence(new double[]{65.0, 85.0, 120.0, 165.0, 220.0});
+                // Test sequence: no calibration prelude
+                playToneSequence(new double[]{65.0, 85.0, 120.0, 165.0, 220.0}, false);
             } catch (Exception t) {
                 UserError.Log.e(TAG, "playTestSequence error: " + t.getMessage(), t);
                 cleanupCurrent();
@@ -88,11 +91,27 @@ public class ToneSequencePlayer {
     // Internals ---------------------------------------------------------------
 
     private static void playToneSequence(double[] glucoseValues) {
+        playToneSequence(glucoseValues, true);
+    }
+
+    private static void playToneSequence(double[] glucoseValues, boolean includeCalibration) {
         // Resolve runtime preferences
         final int toneDurationMs = Math.max(50, Pref.getInt("tone_duration_ms", DEF_TONE_DURATION_MS));
+        final int pauseDurationMs = Math.max(0, Pref.getInt("tone_pause_ms", DEF_PAUSE_DURATION_MS));
+        final int calibPauseAfterMs   = Math.max(0, Pref.getInt("tone_calib_pause_ms", 500));
+        final boolean calibEnabled = includeCalibration && Pref.getBoolean("tone_calib_enabled", true);
+        final double calibMultiplier = Math.max(1, Pref.getInt("tone_calib_multiplier", 10)) / 10.0; // tenths -> fractional
 
-        // Build entire PCM sequence once
-        short[] pcm = buildSequencePcm(glucoseValues, toneDurationMs, PAUSE_DURATION_MS);
+        // Split calibration vs readings to allow different timing
+        List<Double> calValues = calibEnabled ? getCalibrationGlucoseValues() : new ArrayList<>();
+        List<Double> readingValues = new ArrayList<>();
+        for (double v : glucoseValues) readingValues.add(v);
+
+        final int calToneMs = Math.min(10000, (int)Math.round(toneDurationMs * calibMultiplier));
+        final int calPauseMs = Math.min(10000, (int)Math.round(pauseDurationMs * calibMultiplier));
+
+        final float volume = getToneVolume();
+        short[] pcm = buildSequencePcm(calValues, readingValues, calToneMs, calPauseMs, calibPauseAfterMs, toneDurationMs, pauseDurationMs, volume);
 
         // bytes needed for MODE_STATIC buffer
         int totalBytes = pcm.length * 2;
@@ -152,31 +171,51 @@ public class ToneSequencePlayer {
         }
     }
 
-    private static short[] buildSequencePcm(double[] glucoseValues, int toneMs, int pauseMs) {
+    private static short[] buildSequencePcm(List<Double> calValues, List<Double> readings, int calToneMs, int calPauseMs, int calibPauseAfterMs, int toneMs, int pauseMs, float volume) {
+        final int calToneSamples  = msToSamples(calToneMs);
+        final int calPauseSamples = msToSamples(calPauseMs);
         final int toneSamples  = msToSamples(toneMs);
         final int pauseSamples = msToSamples(pauseMs);
         final int leadIn       = msToSamples(LEAD_IN_MS);
         final int leadOut      = msToSamples(LEAD_OUT_MS);
 
-        int n = glucoseValues.length;
-        int total = leadIn + n * toneSamples + Math.max(0, (n - 1)) * pauseSamples + leadOut;
+        final int nCal = (calValues == null) ? 0 : calValues.size();
+        final int nRead = (readings == null) ? 0 : readings.size();
+        final int extraPause = (nCal > 0 && nRead > 0) ? msToSamples(calibPauseAfterMs) : 0;
+        final int total = leadIn
+                + nCal * calToneSamples + Math.max(0, nCal - 1) * calPauseSamples
+                + extraPause
+                + nRead * toneSamples + Math.max(0, nRead - 1) * pauseSamples
+                + leadOut;
         short[] out = new short[total]; // zeros default: lead-in/out + pauses
 
         int writeIdx = leadIn;
-        for (int i = 0; i < n; i++) {
-            double f = mapGlucoseToFrequency(glucoseValues[i]);
-            short[] tone = generateTonePcmTukey(f, toneSamples, /*alpha=*/0.5); // 50% tapered edges
+
+        // calibration block
+        for (int i = 0; i < nCal; i++) {
+            double f = mapGlucoseToFrequency(calValues.get(i));
+            short[] tone = generateTonePcmTukey(f, calToneSamples, /*alpha=*/0.5, volume);
+            System.arraycopy(tone, 0, out, writeIdx, calToneSamples);
+            writeIdx += calToneSamples;
+            if (i < nCal - 1) writeIdx += calPauseSamples;
+        }
+        if (nCal > 0 && nRead > 0) writeIdx += extraPause;
+
+        // readings block
+        for (int i = 0; i < nRead; i++) {
+            double f = mapGlucoseToFrequency(readings.get(i));
+            short[] tone = generateTonePcmTukey(f, toneSamples, /*alpha=*/0.5, volume);
             System.arraycopy(tone, 0, out, writeIdx, toneSamples);
             writeIdx += toneSamples;
-            if (i < n - 1) writeIdx += pauseSamples; // keep zeros
+            if (i < nRead - 1) writeIdx += pauseSamples;
         }
         return out;
     }
 
 
-    private static short[] generateTonePcmRaisedCos(double freqHz, int samples) {
+    private static short[] generateTonePcmRaisedCos(double freqHz, int samples, float volume) {
         final int fade = Math.min(msToSamples(FADE_MS), Math.max(1, samples / 2));
-        final double amp = TONE_VOLUME * 0.8 * Short.MAX_VALUE; // extra headroom
+        final double amp = volume * 0.8 * Short.MAX_VALUE; // extra headroom
         final double w = 2.0 * Math.PI * freqHz / SAMPLE_RATE;
 
         short[] pcm = new short[samples];
@@ -207,8 +246,8 @@ public class ToneSequencePlayer {
         return pcm;
     }
 
-    private static short[] generateTonePcmTukey(double freqHz, int samples, double alpha) {
-        final double amp = TONE_VOLUME * 0.85 * Short.MAX_VALUE;
+    private static short[] generateTonePcmTukey(double freqHz, int samples, double alpha, float volume) {
+        final double amp = volume * 0.85 * Short.MAX_VALUE;
         final double w = 2.0 * Math.PI * freqHz / SAMPLE_RATE;
 
         short[] pcm = new short[samples];
@@ -245,6 +284,12 @@ public class ToneSequencePlayer {
         return pcm;
     }
 
+    private static float getToneVolume() {
+        int pct = Pref.getInt("tone_volume", (int)(DEF_TONE_VOLUME * 100));
+        if (pct < 0) pct = 0; if (pct > 100) pct = 100;
+        return pct / 100f;
+    }
+
 
     private static int msToSamples(int ms) {
         return (int) Math.round(ms * (SAMPLE_RATE / 1000.0));
@@ -262,7 +307,14 @@ public class ToneSequencePlayer {
 
         double g = Math.max(minG, Math.min(maxG, glucose));
         double ratio = (g - minG) / (maxG - minG);
-        return minF + ratio * (maxF - minF);
+        if (Pref.getBoolean("tone_mapping_log_scale", false)) {
+            // Exponential mapping: equal ratio in glucose maps to equal ratio in frequency (octave-like)
+            double span = maxF / minF;
+            return minF * Math.pow(span, ratio);
+        } else {
+            // Linear mapping
+            return minF + ratio * (maxF - minF);
+        }
     }
 
     private static List<Double> getRecentReadings() {
@@ -289,6 +341,22 @@ public class ToneSequencePlayer {
             UserError.Log.e(TAG, "getRecentReadings: " + e.getMessage(), e);
         }
         return values;
+    }
+
+    private static List<Double> getCalibrationGlucoseValues() {
+        List<Double> cal = new ArrayList<>(3);
+        try {
+            int low  = Pref.getInt("tone_calib_low_glucose", 70);
+            int high = Pref.getInt("tone_calib_high_glucose", 180);
+            int max  = Pref.getInt("tone_calib_max_glucose", 400);
+            // sanitize ordering
+            if (high < low) high = low;
+            if (max < high) max = high;
+            cal.add((double) low);
+            cal.add((double) high);
+            cal.add((double) max);
+        } catch (Exception ignore) {}
+        return cal;
     }
 
     private static void cleanupCurrent() {
