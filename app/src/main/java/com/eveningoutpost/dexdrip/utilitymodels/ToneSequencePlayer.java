@@ -17,10 +17,8 @@ public class ToneSequencePlayer {
     private static final String TAG = "ToneSequencePlayer";
 
     // Audio configuration
-    private static final int SAMPLE_RATE = 44100;
     private static final int TONE_DURATION_MS = 500;
     private static final int PAUSE_DURATION_MS = 200;
-    private static final int FADE_MS = 5;                 // fade in/out per tone to avoid clicks
 
     // Glucose → frequency mapping
     private static final double MIN_FREQUENCY = 200.0;
@@ -28,7 +26,11 @@ public class ToneSequencePlayer {
     private static final double MIN_GLUCOSE = 40.0;
     private static final double MAX_GLUCOSE = 300.0;
 
-    private static final float TONE_VOLUME = 0.7f;
+    private static final int SAMPLE_RATE   = 48000; // avoid SRC on most devices
+    private static final int FADE_MS       = 100;    // longer edge taper
+    private static final int LEAD_IN_MS    = 1000;     // silence before first tone
+    private static final int LEAD_OUT_MS   = 30;     // optional
+    private static final float TONE_VOLUME = 0.3f;  // extra headroom
 
     private static volatile boolean isPlaying = false;
     private static AudioTrack currentAudioTrack = null;
@@ -149,58 +151,98 @@ public class ToneSequencePlayer {
     }
 
     private static short[] buildSequencePcm(double[] glucoseValues, int toneMs, int pauseMs) {
-        final int toneSamples = msToSamples(toneMs);
+        final int toneSamples  = msToSamples(toneMs);
         final int pauseSamples = msToSamples(pauseMs);
+        final int leadIn       = msToSamples(LEAD_IN_MS);
+        final int leadOut      = msToSamples(LEAD_OUT_MS);
 
-        // total samples = N * tone + (N-1) * pause
         int n = glucoseValues.length;
-        int total = n * toneSamples + Math.max(0, (n - 1)) * pauseSamples;
-        short[] out = new short[total];
+        int total = leadIn + n * toneSamples + Math.max(0, (n - 1)) * pauseSamples + leadOut;
+        short[] out = new short[total]; // zeros default: lead-in/out + pauses
 
-        int writeIdx = 0;
+        int writeIdx = leadIn;
         for (int i = 0; i < n; i++) {
             double f = mapGlucoseToFrequency(glucoseValues[i]);
-            short[] tone = generateTonePcm(f, toneSamples);
-
+            short[] tone = generateTonePcmTukey(f, toneSamples, /*alpha=*/0.5); // 50% tapered edges
             System.arraycopy(tone, 0, out, writeIdx, toneSamples);
             writeIdx += toneSamples;
-
-            // pause (silence) except after last tone
-            if (i < n - 1 && pauseSamples > 0) {
-                // leaving array zeros is fine; advance index
-                writeIdx += pauseSamples;
-            }
+            if (i < n - 1) writeIdx += pauseSamples; // keep zeros
         }
         return out;
     }
 
-    private static short[] generateTonePcm(double freqHz, int samples) {
-        // amplitude with headroom
-        final double amp = TONE_VOLUME * 0.95 * Short.MAX_VALUE;
-        final double twoPiOverFs = 2.0 * Math.PI / SAMPLE_RATE;
 
-        // linear fade of FADE_MS at start and end
-        final int fadeSamples = Math.min(msToSamples(FADE_MS), samples / 4);
+    private static short[] generateTonePcmRaisedCos(double freqHz, int samples) {
+        final int fade = Math.min(msToSamples(FADE_MS), Math.max(1, samples / 2));
+        final double amp = TONE_VOLUME * 0.8 * Short.MAX_VALUE; // extra headroom
+        final double w = 2.0 * Math.PI * freqHz / SAMPLE_RATE;
 
         short[] pcm = new short[samples];
         for (int i = 0; i < samples; i++) {
             double env = 1.0;
-            if (fadeSamples > 0) {
-                if (i < fadeSamples) {
-                    env = (i + 1) / (double) fadeSamples;                // fade in
-                } else if (i >= samples - fadeSamples) {
-                    env = (samples - i) / (double) fadeSamples;          // fade out
-                }
+
+            // fade-in: 0 -> 1 using half-cosine (hits exactly 0 at i=0)
+            if (i < fade) {
+                double x = (double) i / (double) fade;          // [0,1)
+                env *= 0.5 - 0.5 * Math.cos(Math.PI * x);       // 0..~1
             }
-            double s = Math.sin(twoPiOverFs * freqHz * i);
-            int v = (int) Math.round(amp * env * s);
-            // clamp
+            // fade-out: 1 -> 0 (hits exactly 0 at the last sample)
+            if (i >= samples - fade) {
+                double x = (double) (samples - 1 - i) / (double) fade; // [0,1]
+                env *= 0.5 - 0.5 * Math.cos(Math.PI * x);       // ~1..0; at i=last -> 0
+            }
+
+            double s = Math.sin(w * i) * env;
+            int v = (int) Math.round(amp * s);
             if (v > Short.MAX_VALUE) v = Short.MAX_VALUE;
             if (v < Short.MIN_VALUE) v = Short.MIN_VALUE;
             pcm[i] = (short) v;
         }
+
+        // enforce exact zeros at boundaries
+        pcm[0] = 0;
+        pcm[samples - 1] = 0;
         return pcm;
     }
+
+    private static short[] generateTonePcmTukey(double freqHz, int samples, double alpha) {
+        final double amp = TONE_VOLUME * 0.85 * Short.MAX_VALUE;
+        final double w = 2.0 * Math.PI * freqHz / SAMPLE_RATE;
+
+        short[] pcm = new short[samples];
+        for (int i = 0; i < samples; i++) {
+            double t = (double) i / (samples - 1); // [0,1]
+            double env;
+            if (alpha <= 0.0) {
+                // pure Hann
+                env = 0.5 * (1.0 - Math.cos(2.0 * Math.PI * t));
+            } else if (alpha >= 1.0) {
+                env = 1.0;
+            } else {
+                double edge = alpha / 2.0;
+                if (t < edge) {
+                    double x = t / edge;                // [0,1]
+                    env = 0.5 * (1.0 - Math.cos(Math.PI * x));
+                } else if (t <= 1.0 - edge) {
+                    env = 1.0;
+                } else {
+                    double x = (t - 1.0 + edge) / edge; // [0,1]
+                    env = 0.5 * (1.0 + Math.cos(Math.PI * x));
+                }
+            }
+
+            double s = Math.sin(w * i) * env;
+            int v = (int) Math.round(amp * s);
+            if (v > Short.MAX_VALUE) v = Short.MAX_VALUE;
+            if (v < Short.MIN_VALUE) v = Short.MIN_VALUE;
+            pcm[i] = (short) v;
+        }
+        // exact zeros at boundaries
+        pcm[0] = 0;
+        pcm[samples - 1] = 0;
+        return pcm;
+    }
+
 
     private static int msToSamples(int ms) {
         return (int) Math.round(ms * (SAMPLE_RATE / 1000.0));

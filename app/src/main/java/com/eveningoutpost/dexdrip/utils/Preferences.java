@@ -1163,6 +1163,19 @@ public class Preferences extends BasePreferenceActivity implements SearchPrefere
                 });
             }
 
+            final Preference playCurrentToneSequence = findPreference("play_current_tone_sequence");
+            if (playCurrentToneSequence != null) {
+                playCurrentToneSequence.setOnPreferenceClickListener(preference -> {
+                    if (ToneSequencePlayer.isPlaying()) {
+                        JoH.static_toast_short("Already playing sequence");
+                    } else {
+                        JoH.static_toast_short("Playing current readings");
+                        ToneSequencePlayer.playReadingsSequence();
+                    }
+                    return true;
+                });
+            }
+
             addPreferencesFromResource(R.xml.xdrip_plus_prefs);
 
             bindPreferenceSummaryToValue(findPreference("persistent_high_threshold_mins"));
@@ -3232,4 +3245,3 @@ public class Preferences extends BasePreferenceActivity implements SearchPrefere
         return true;
     }
 }
-

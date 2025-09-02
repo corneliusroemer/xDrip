@@ -10,6 +10,7 @@ import com.eveningoutpost.dexdrip.sharemodels.models.ShareUploadPayload;
 import com.eveningoutpost.dexdrip.utilitymodels.Inevitable;
 import com.eveningoutpost.dexdrip.utilitymodels.Notifications;
 import com.eveningoutpost.dexdrip.utilitymodels.Pref;
+import com.eveningoutpost.dexdrip.utilitymodels.ToneSequencePlayer;
 import com.eveningoutpost.dexdrip.utilitymodels.VehicleMode;
 import com.eveningoutpost.dexdrip.utilitymodels.pebble.PebbleUtil;
 import com.eveningoutpost.dexdrip.utilitymodels.pebble.PebbleWatchSync;
@@ -62,6 +63,7 @@ public class NewDataObserver {
         InfoContentProvider.ping("bg");
         uploadToShare(bgReading, is_follower);
         textToSpeech(bgReading, null);
+        readingsToTone();
         LibreBlock.UpdateBgVal(bgReading.timestamp, bgReading.calculated_value);
         LockScreenWallPaper.setIfEnabled();
         sendToHealthConnect(bgReading);
@@ -173,6 +175,12 @@ public class NewDataObserver {
                 BgToSpeech.speak(bgReading.calculated_value, bgReading.timestamp, bgReading.slopeName());
             }
         }
+    }
+
+    // turn readings into tone sequence
+    private static void readingsToTone() {
+        UserError.Log.d("ReadingsToTone", "Converting readings to tone sequence");
+        ToneSequencePlayer.playReadingsSequence();
     }
 
     // share uploader

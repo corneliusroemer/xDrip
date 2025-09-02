@@ -967,6 +967,10 @@
                 android:key="test_tone_sequence"
                 android:summary="Play a test tone sequence with sample glucose values"
                 android:title="Test Tone Sequence" />
+            <Preference
+                android:key="play_current_tone_sequence"
+                android:summary="Play a tone sequence using your latest glucose readings"
+                android:title="Play Current Readings" />
         </PreferenceScreen>
         <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
             android:icon="@drawable/ic_open_in_app_grey600_48dp"
@@ -1656,4 +1660,3 @@
 
     </PreferenceCategory>
 </PreferenceScreen>
-
