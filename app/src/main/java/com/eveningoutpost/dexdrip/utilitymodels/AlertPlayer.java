@@ -31,6 +31,7 @@ import com.eveningoutpost.dexdrip.models.UserError.Log;
 import com.eveningoutpost.dexdrip.R;
 import com.eveningoutpost.dexdrip.services.SnoozeOnNotificationDismissService;
 import com.eveningoutpost.dexdrip.SnoozeActivity;
+import com.eveningoutpost.dexdrip.utilitymodels.ToneSequencePlayer;
 import com.eveningoutpost.dexdrip.utilitymodels.pebble.PebbleWatchSync;
 import com.eveningoutpost.dexdrip.eassist.AlertTracker;
 import com.eveningoutpost.dexdrip.ui.FlashLight;
@@ -631,6 +632,11 @@ public class AlertPlayer {
         // speak alert
         if (Pref.getBooleanDefaultFalse("speak_alerts")) {
             SpeechUtil.say(highlow + ", " + bgValue, 3000);
+        }
+        
+        // tone sequence alert
+        if (Pref.getBooleanDefaultFalse("tone_readings_alerts_enabled")) {
+            ToneSequencePlayer.playReadingsSequence();
         }
 
         if (Pref.getBooleanDefaultFalse("flash_torch_alerts_charging")) {

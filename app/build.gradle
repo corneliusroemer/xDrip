@@ -24,7 +24,7 @@ if (getGradle().getStartParameter().getTaskRequests().toString().contains("Relea
         variantMapsEnabled false
         uploadMapsForVariant ''
     }*/
-    apply plugin: 'com.google.android.gms.oss-licenses-plugin'
+    //apply plugin: 'com.google.android.gms.oss-licenses-plugin' // Removed for tone test build
 }
 
 repositories {
@@ -88,7 +88,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.eveningoutpost.dexdrip"
+        applicationId "com.eveningoutpost.dexdrip.tonetest"
         minSdkVersion 24
         // increasing target SDK version can cause compatibility issues with Android 7+
         //noinspection ExpiredTargetSdkVersion
@@ -398,4 +398,4 @@ tasks.withType(Test) {
     }
 }
 
-apply plugin: 'com.google.gms.google-services'
+//apply plugin: 'com.google.gms.google-services' // Removed for tone test build

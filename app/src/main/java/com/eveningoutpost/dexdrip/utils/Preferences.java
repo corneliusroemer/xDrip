@@ -112,6 +112,7 @@ import com.eveningoutpost.dexdrip.utilitymodels.Intents;
 import com.eveningoutpost.dexdrip.utilitymodels.Pref;
 import com.eveningoutpost.dexdrip.utilitymodels.ShotStateStore;
 import com.eveningoutpost.dexdrip.utilitymodels.SpeechUtil;
+import com.eveningoutpost.dexdrip.utilitymodels.ToneSequencePlayer;
 import com.eveningoutpost.dexdrip.utilitymodels.UpdateActivity;
 import com.eveningoutpost.dexdrip.utilitymodels.WholeHouse;
 import com.eveningoutpost.dexdrip.utilitymodels.pebble.PebbleUtil;
@@ -1148,6 +1149,20 @@ public class Preferences extends BasePreferenceActivity implements SearchPrefere
             bindPreferenceSummaryToValue(findPreference("cloud_storage_mongodb_device_status_collection"));
 
             addPreferencesFromResource(R.xml.pref_advanced_settings);
+
+            final Preference testToneSequence = findPreference("test_tone_sequence");
+            if (testToneSequence != null) {
+                testToneSequence.setOnPreferenceClickListener(preference -> {
+                    if (ToneSequencePlayer.isPlaying()) {
+                        JoH.static_toast_short("Already playing sequence");
+                    } else {
+                        JoH.static_toast_short("Playing test sequence");
+                        ToneSequencePlayer.playTestSequence();
+                    }
+                    return true;
+                });
+            }
+
             addPreferencesFromResource(R.xml.xdrip_plus_prefs);
 
             bindPreferenceSummaryToValue(findPreference("persistent_high_threshold_mins"));

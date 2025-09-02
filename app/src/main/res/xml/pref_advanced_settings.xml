@@ -943,6 +943,31 @@
                 android:summary="@string/short_speak_readings_shortcut"
                 android:title="@string/speak_readings_shortcut" />
         </PreferenceScreen>
+        
+        <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+            android:icon="@drawable/ic_speak_reading_grey600_48dp"
+            android:key="xdrip_tone_readings_settings"
+            android:summary="Play glucose readings as tone sequences where pitch indicates glucose level"
+            android:title="Tone Readings">
+            <SwitchPreference
+                android:defaultValue="false"
+                android:key="tone_readings_enabled"
+                android:summary="Play last 5 glucose readings as tone sequence with different pitches"
+                android:switchTextOff="@string/short_off_text_for_switches"
+                android:switchTextOn="@string/short_on_text_for_switches"
+                android:title="Enable Tone Readings" />
+            <SwitchPreference
+                android:defaultValue="false"
+                android:key="tone_readings_alerts_enabled"
+                android:summary="Play tone sequence during glucose alerts"
+                android:switchTextOff="@string/short_off_text_for_switches"
+                android:switchTextOn="@string/short_on_text_for_switches"
+                android:title="Tone Alerts" />
+            <Preference
+                android:key="test_tone_sequence"
+                android:summary="Play a test tone sequence with sample glucose values"
+                android:title="Test Tone Sequence" />
+        </PreferenceScreen>
         <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
             android:icon="@drawable/ic_open_in_app_grey600_48dp"
             android:key="xdrip_intrer_app_settings"
