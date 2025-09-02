@@ -8,6 +8,7 @@ import android.media.AudioTrack;
 import com.eveningoutpost.dexdrip.BestGlucose;
 import com.eveningoutpost.dexdrip.models.BgReading;
 import com.eveningoutpost.dexdrip.models.UserError;
+import com.eveningoutpost.dexdrip.utilitymodels.Pref;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,15 +17,13 @@ public class ToneSequencePlayer {
 
     private static final String TAG = "ToneSequencePlayer";
 
-    // Audio configuration
-    private static final int TONE_DURATION_MS = 500;
-    private static final int PAUSE_DURATION_MS = 200;
-
-    // Glucose → frequency mapping
-    private static final double MIN_FREQUENCY = 200.0;
-    private static final double MAX_FREQUENCY = 800.0;
-    private static final double MIN_GLUCOSE = 40.0;
-    private static final double MAX_GLUCOSE = 300.0;
+    // Defaults (overridden by preferences)
+    private static final int    DEF_TONE_DURATION_MS = 500;
+    private static final int    PAUSE_DURATION_MS    = 200; // keep fixed gap for readability
+    private static final double DEF_MIN_FREQUENCY    = 200.0;
+    private static final double DEF_MAX_FREQUENCY    = 800.0;
+    private static final double DEF_MIN_GLUCOSE      = 40.0;
+    private static final double DEF_MAX_GLUCOSE      = 300.0;
 
     private static final int SAMPLE_RATE   = 48000; // avoid SRC on most devices
     private static final int FADE_MS       = 100;    // longer edge taper
@@ -44,7 +43,7 @@ public class ToneSequencePlayer {
         }
         new Thread(() -> {
             try {
-                List<Double> gv = getLastFiveReadings();
+                List<Double> gv = getRecentReadings();
                 if (gv.isEmpty()) {
                     UserError.Log.d(TAG, "No readings");
                     return;
@@ -89,8 +88,11 @@ public class ToneSequencePlayer {
     // Internals ---------------------------------------------------------------
 
     private static void playToneSequence(double[] glucoseValues) {
+        // Resolve runtime preferences
+        final int toneDurationMs = Math.max(50, Pref.getInt("tone_duration_ms", DEF_TONE_DURATION_MS));
+
         // Build entire PCM sequence once
-        short[] pcm = buildSequencePcm(glucoseValues, TONE_DURATION_MS, PAUSE_DURATION_MS);
+        short[] pcm = buildSequencePcm(glucoseValues, toneDurationMs, PAUSE_DURATION_MS);
 
         // bytes needed for MODE_STATIC buffer
         int totalBytes = pcm.length * 2;
@@ -249,30 +251,42 @@ public class ToneSequencePlayer {
     }
 
     private static double mapGlucoseToFrequency(double glucose) {
-        double g = Math.max(MIN_GLUCOSE, Math.min(MAX_GLUCOSE, glucose));
-        double ratio = (g - MIN_GLUCOSE) / (MAX_GLUCOSE - MIN_GLUCOSE);
-        return MIN_FREQUENCY + ratio * (MAX_FREQUENCY - MIN_FREQUENCY);
+        // Pull bounds from preferences and sanitize
+        double minG = Pref.getInt("tone_min_glucose", (int) DEF_MIN_GLUCOSE);
+        double maxG = Pref.getInt("tone_max_glucose", (int) DEF_MAX_GLUCOSE);
+        if (maxG <= minG) maxG = minG + 1.0; // avoid divide-by-zero
+
+        double minF = Pref.getInt("tone_min_frequency", (int) DEF_MIN_FREQUENCY);
+        double maxF = Pref.getInt("tone_max_frequency", (int) DEF_MAX_FREQUENCY);
+        if (maxF <= minF) maxF = minF + 1.0;
+
+        double g = Math.max(minG, Math.min(maxG, glucose));
+        double ratio = (g - minG) / (maxG - minG);
+        return minF + ratio * (maxF - minF);
     }
 
-    private static List<Double> getLastFiveReadings() {
-        List<Double> values = new ArrayList<>();
-        try {
-            BestGlucose.DisplayGlucose dg = BestGlucose.getDisplayGlucose();
-            if (dg != null && dg.mgdl > 0) values.add(dg.mgdl);
+    private static List<Double> getRecentReadings() {
+        final int count = Math.max(1, Math.min(36, Pref.getInt("tone_readings_count", 5)));
+        final boolean oldestFirst = Pref.getBoolean("tone_order_oldest_first", false);
 
-            List<BgReading> readings = BgReading.latest(5);
+        List<Double> values = new ArrayList<>(count);
+        try {
+            List<BgReading> readings = BgReading.latest(count);
             if (readings != null) {
-                for (BgReading r : readings) {
-                    if (values.size() >= 5) break;
-                    if (r.calculated_value > 0) {
-                        if (values.isEmpty() || Math.abs(values.get(0) - r.calculated_value) > 1.0) {
-                            values.add(r.calculated_value);
-                        }
+                // BgReading.latest returns newest first
+                if (oldestFirst) {
+                    for (int i = readings.size() - 1; i >= 0; i--) {
+                        BgReading r = readings.get(i);
+                        if (r.calculated_value > 0) values.add(r.calculated_value);
+                    }
+                } else {
+                    for (BgReading r : readings) {
+                        if (r.calculated_value > 0) values.add(r.calculated_value);
                     }
                 }
             }
         } catch (Exception e) {
-            UserError.Log.e(TAG, "getLastFiveReadings: " + e.getMessage());
+            UserError.Log.e(TAG, "getRecentReadings: " + e.getMessage(), e);
         }
         return values;
     }

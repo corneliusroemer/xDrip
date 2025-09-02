@@ -945,6 +945,7 @@
         </PreferenceScreen>
         
         <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
             android:icon="@drawable/ic_speak_reading_grey600_48dp"
             android:key="xdrip_tone_readings_settings"
             android:summary="Play glucose readings as tone sequences where pitch indicates glucose level"
@@ -963,6 +964,64 @@
                 android:switchTextOff="@string/short_off_text_for_switches"
                 android:switchTextOn="@string/short_on_text_for_switches"
                 android:title="Tone Alerts" />
+
+            <!-- Playback configuration -->
+            <SeekBarPreference
+                android:key="tone_readings_count"
+                android:title="Readings to play"
+                android:summary="Number of readings in sequence"
+                android:defaultValue="5"
+                android:min="1"
+                android:max="36" />
+
+            <SwitchPreference
+                android:key="tone_order_oldest_first"
+                android:title="Oldest first"
+                android:summary="Play sequence from oldest to newest"
+                android:defaultValue="false"
+                android:switchTextOff="@string/short_off_text_for_switches"
+                android:switchTextOn="@string/short_on_text_for_switches" />
+
+            <!-- Tone characteristics -->
+            <SeekBarPreference
+                android:key="tone_duration_ms"
+                android:title="Tone length (ms)"
+                android:summary="Duration for each tone"
+                android:defaultValue="500"
+                android:min="100"
+                android:max="2000" />
+
+            <SeekBarPreference
+                android:key="tone_min_frequency"
+                android:title="Min pitch (Hz)"
+                android:summary="Lowest frequency for mapping"
+                android:defaultValue="200"
+                android:min="100"
+                android:max="4000" />
+
+            <SeekBarPreference
+                android:key="tone_max_frequency"
+                android:title="Max pitch (Hz)"
+                android:summary="Highest frequency for mapping"
+                android:defaultValue="800"
+                android:min="200"
+                android:max="6000" />
+
+            <SeekBarPreference
+                android:key="tone_min_glucose"
+                android:title="Min glucose (mg/dL)"
+                android:summary="Lower bound of mapping"
+                android:defaultValue="40"
+                android:min="20"
+                android:max="300" />
+
+            <SeekBarPreference
+                android:key="tone_max_glucose"
+                android:title="Max glucose (mg/dL)"
+                android:summary="Upper bound of mapping"
+                android:defaultValue="300"
+                android:min="120"
+                android:max="450" />
             <Preference
                 android:key="test_tone_sequence"
                 android:summary="Play a test tone sequence with sample glucose values"

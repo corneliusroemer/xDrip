@@ -179,8 +179,10 @@ public class NewDataObserver {
 
     // turn readings into tone sequence
     private static void readingsToTone() {
-        UserError.Log.d("ReadingsToTone", "Converting readings to tone sequence");
-        ToneSequencePlayer.playReadingsSequence();
+        if (Pref.getBooleanDefaultFalse("tone_readings_enabled")) {
+            UserError.Log.d("ReadingsToTone", "Converting readings to tone sequence");
+            ToneSequencePlayer.playReadingsSequence();
+        }
     }
 
     // share uploader
